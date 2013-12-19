@@ -25,7 +25,6 @@
 package models.database
 
 import com.github.tototoshi.slick.JodaSupport._
-
 import models.JodaMoney._
 import models.BookingEntry
 import org.joda.time.{ LocalDate, DateTime }
@@ -62,6 +61,7 @@ object BookingEntries extends Table[BookingEntry]("BOOKING_ENTRY") {
   def transactionTypeId = column[Option[Long]]("TRANSACTION_TYPE_ID")
 
   def created = column[DateTime]("CREATED")
+  // There is no createdBy because that’s the ownerId.
 
   def owner = foreignKey("BOOKING_OWNER_FK", ownerId, People)(_.id)
   def from = foreignKey("BOOKING_FROM_FK", fromId, Accounts)(_.id)
@@ -92,4 +92,7 @@ object BookingEntries extends Table[BookingEntry]("BOOKING_ENTRY") {
       })
 
   def forInsert = * returning id
+
+  def forUpdate = summary ~ sourceCurrency ~ sourceAmount ~ sourcePercentage ~ fromId ~ fromCurrency ~ fromAmount ~
+    toId ~ toCurrency ~ toAmount ~ brandId ~ reference ~ referenceDate ~ description ~ url ~ transactionTypeId
 }

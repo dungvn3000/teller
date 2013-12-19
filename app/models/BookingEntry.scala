@@ -24,6 +24,7 @@
 
 package models
 
+import java.math.RoundingMode
 import models.JodaMoney._
 import models.database._
 import org.joda.time.{ DateTime, LocalDate }
@@ -31,11 +32,9 @@ import org.joda.money.{ CurrencyUnit, Money }
 import play.api.Play.current
 import play.api.db.slick.Config.driver.simple._
 import play.api.db.slick.DB
-import scala.Some
 import services.CurrencyConverter
 import scala.concurrent.ExecutionContext.Implicits.global
 import scala.concurrent.Future
-import java.math.RoundingMode
 
 /**
  * A financial (accounting) bookkeeping entry, which represents money owed from one account to another.
@@ -63,17 +62,26 @@ case class BookingEntry(
 
   created: DateTime = DateTime.now()) {
 
-  def from = Account.find(fromId).get
+  lazy val from = Account.find(fromId).get
 
-  def to = Account.find(toId).get
+  lazy val to = Account.find(toId).get
 
-  def owner = Person.find(ownerId).get
+  lazy val owner = Person.find(ownerId).get
 
-  def brand = Brand.find(brandId).get
+  lazy val brand = Brand.find(brandId).get
 
-  def owes = source.isPositiveOrZero
+  lazy val owes = source.isPositiveOrZero
 
-  def transactionType = transactionTypeId.flatMap(TransactionType.find(_))
+  lazy val transactionType = transactionTypeId.flatMap(TransactionType.find(_))
+
+  lazy val editable = from.active && to.active
+
+  /**
+   * Checks if the given user has permission to edit this booking entry.
+   */
+  def editableBy(user: UserAccount) = {
+    editable && (user.personId == ownerId || from.canBeEditedBy(user) || to.canBeEditedBy(user))
+  }
 
   def insert: BookingEntry = DB.withSession { implicit session: Session ⇒
     val nextBookingNumber = Some(BookingEntry.nextBookingNumber)
@@ -181,4 +189,19 @@ object BookingEntry {
     Query(BookingEntries.map(_.bookingNumber).max).first().map(_ + 1).getOrElse(1001)
   }
 
+  /**
+   * Updates a booking entry without changing its ID, owner, booking number, booking date or date created.
+   */
+  def update(e: BookingEntry): Unit = DB.withSession { implicit session: Session ⇒
+    e.id.map { id ⇒
+      val sourceAmount: BigDecimal = e.source.getAmount
+      val toAmount: BigDecimal = e.toAmount.getAmount
+      val fromAmount: BigDecimal = e.fromAmount.getAmount
+      val updateTuple = (e.summary, e.source.getCurrencyUnit.getCode, sourceAmount, e.sourcePercentage, e.fromId,
+        e.fromAmount.getCurrencyUnit.getCode, fromAmount, e.toId, e.toAmount.getCurrencyUnit.getCode, toAmount,
+        e.brandId, e.reference, e.referenceDate, e.description, e.url, e.transactionTypeId)
+      val updateQuery = Query(BookingEntries).filter(_.id === id).map(_.forUpdate)
+      updateQuery.update(updateTuple)
+    }
+  }
 }

@@ -1,4 +1,4 @@
-@(user: securesocial.core.Identity, booking: BookingEntry)(implicit request: Request[Any], flash: Flash, handler: AuthorisationHandler, token: play.filters.csrf.CSRF.Token)
+@(user: securesocial.core.Identity, booking: BookingEntry, currentUser: UserAccount)(implicit request: Request[Any], flash: Flash, handler: AuthorisationHandler, token: play.filters.csrf.CSRF.Token)
 @import scala.math.BigDecimal.RoundingMode
 
 @import helper.CSRF
@@ -10,7 +10,12 @@
 @main(booking.summary + " - Booking", Some(user)) {
 
   <header>
-    <h1>Booking: @booking.summary</h1>
+    <h1>
+      Booking: @booking.summary
+      @if(booking.editableBy(currentUser)) {
+        <a class="btn-small btn"href="@routes.BookingEntries.edit(booking.bookingNumber.get)"><i class="icon-pencil"></i> Edit</a>
+      }
+    </h1>
     <p><small>Created by @booking.owner.fullName on @booking.created.format </small></p>
   </header>
 
